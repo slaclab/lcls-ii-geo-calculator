@@ -99,8 +99,8 @@ class KappaDiffractometer:
         ##rotmat = np.dot(rotationmat3D(self.theta, zaxis), rotmat)
         return rotmat
 
-    def calc_detector_angles(self, ref_rotation, sample_Ghkl, sample_k0, sample_lambda0):
+    def calc_detector_angles(self, ref_rotation, sample_Ghkl, sample_k0, sample_kp, sample_lambda0):
         kp = np.dot(ref_rotation, sample_Ghkl) + sample_k0
-        self.nu = np.arctan2(kp[1], kp[0]) # radians
-        self.delta = np.arcsin(kp[2] * sample_lambda0)
+        self.nu = np.arctan2(sample_kp[1], sample_kp[0]) # radians
+        self.delta = np.arcsin(sample_kp[2] * sample_lambda0)
         #return self.nu, self.delta

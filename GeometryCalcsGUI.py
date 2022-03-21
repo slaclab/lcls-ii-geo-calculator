@@ -1,3 +1,4 @@
+import _tkinter
 from tkinter import *
 from tkinter import ttk, filedialog
 import sys
@@ -75,6 +76,10 @@ class BeamGeoApp(Tk):
         self.delta.set(0)
         self.nu = DoubleVar()
         self.nu.set(0)
+        self.k0 = StringVar()
+        self.k0.set("[0,0,0]")
+        self.kp = StringVar()
+        self.kp.set("[0,0,0]")
 
         # call constructor functions
         leftcol = ttk.Frame(self)
@@ -111,7 +116,9 @@ class BeamGeoApp(Tk):
 
     # draw calculation outputs (text)
     def draw_output_text(self, parent, col, row):
-        calcs_out = ttk.Frame(parent)
+        output_frame = ttk.Frame(parent)
+
+        calcs_out = ttk.Frame(output_frame)
         calcs_out['borderwidth'] = 2
         calcs_out['relief'] = 'sunken'
         diff_angles_label = ttk.Label(calcs_out, text="Diffractometer Angles [deg]")
@@ -121,7 +128,7 @@ class BeamGeoApp(Tk):
 
         # construct diffractometer angle outputs
         diffang_frame = ttk.Frame(calcs_out)
-        diffang_frame['borderwidth'] = 1;
+        diffang_frame['borderwidth'] = 1
         diffang_frame['relief'] = 'solid'
         klabel = ttk.Label(diffang_frame, text="Kappa:")
         k = ttk.Label(diffang_frame, textvariable=self.kappa)
@@ -137,7 +144,7 @@ class BeamGeoApp(Tk):
 
         # construct detector angle outputs
         detang_frame = ttk.Frame(calcs_out)
-        detang_frame['borderwidth'] = 1;
+        detang_frame['borderwidth'] = 1
         detang_frame['relief'] = 'solid'
         dlabel = ttk.Label(detang_frame, text="Delta:")
         d = ttk.Label(detang_frame, textvariable=self.delta)
@@ -149,7 +156,30 @@ class BeamGeoApp(Tk):
             i += 1
         detang_frame.grid(column=0, row=3)
 
-        calcs_out.grid(column=col, row=row, sticky=NW, padx=3, pady=3)
+        calcs_out.grid(column=0, row=0, sticky=NW, padx=3, pady=1)
+
+        # additional outputs (momentum vector, bragg angle?)
+        extras_frame = ttk.Frame(output_frame)
+        extras_frame['borderwidth'] = 1
+        extras_frame['relief'] = 'sunken'
+        mvec_label = ttk.Label(extras_frame, text="Momentum transfer")
+        kframe = ttk.Frame(extras_frame)
+        k0_label = ttk.Label(kframe, text="k_0:")
+        kp_label = ttk.Label(kframe, text="  k_p:")
+        k0 = ttk.Label(kframe, textvariable=self.k0)
+        kp = ttk.Label(kframe, textvariable=self.kp)
+        k0_label.grid(column=0, row=0, padx=3)
+        k0.grid(column=1, row=0)
+        kp_label.grid(column=2, row=0, padx=3)
+        kp.grid(column=3, row=0)
+
+        mvec_label.grid(column=0, row=0)
+        kframe.grid(column=0, row=1)
+
+        extras_frame.grid(column=1, row = 0, sticky=NW, padx=3, pady=1)
+
+        output_frame.grid(column=col, row=row, sticky=NW)
+
 
     # overhead function calls commands to draw lattice radios, file inputs, manual entries
     def draw_latticeinfo_block(self, parent, col, row):
@@ -503,10 +533,22 @@ class BeamGeoApp(Tk):
 
     # collect the HKL indices and send them to DiffracSample object
     def update_hkl_from_inputs(self):
-        # TODO any necessary error/type checking
+        # replace empty strings with zeros
+        for item in [self.h_miller, self.k_miller, self.l_miller]:
+            try:
+                item.get()
+            except _tkinter.TclError:
+                item.set(0.0)
         self.sample.bragg_hkl = np.array([self.h_miller.get(), self.k_miller.get(), self.l_miller.get()])
 
     def update_samplenormal_from_inputs(self):
+        # replace empty strings with zeros
+        for item in [self.snorm_x, self.snorm_y, self.snorm_z]:
+            try:
+                item.get()
+            except _tkinter.TclError:
+                item.set(0.0)
+
         self.sample.set_sample_normal(np.array([self.snorm_x.get(), self.snorm_y.get(), self.snorm_z.get()]))
 
     def run_command(self):
@@ -537,7 +579,7 @@ class BeamGeoApp(Tk):
         print(ref_rotation)
         # calculate instrument angles
         self.diffractometer.set_kappa_from_eulerian(ref_rotation)
-        self.diffractometer.calc_detector_angles(ref_rotation, self.sample.Ghkl, self.sample.k0, self.sample.lambda0)
+        self.diffractometer.calc_detector_angles(ref_rotation, self.sample.Ghkl, self.sample.k0, self.sample.kp, self.sample.lambda0)
 
         # update display
         angle_decimal_places = 4
@@ -547,7 +589,12 @@ class BeamGeoApp(Tk):
         self.nu.set(np.round(np.rad2deg(self.diffractometer.nu),angle_decimal_places))
         self.delta.set(np.round(np.rad2deg(self.diffractometer.delta), angle_decimal_places))
 
-        # TODO: output momentum vector
+        # output momentum vector
+        k0_string = np.array2string(self.sample.k0, formatter={'float_kind':lambda x: "%.2f" % x}, separator=',')
+        kp_string = np.array2string(self.sample.kp, formatter={'float_kind':lambda x: "%.2f" % x}, separator=',')
+        self.k0.set(k0_string)
+        self.kp.set(kp_string)
+
 
 
 

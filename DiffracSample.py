@@ -16,8 +16,9 @@ class DiffracSample:
         self.beam_axis = np.array([1, 0, 0])  # beam at x-axis unless overridden
         self.normal_vect = None
         self.inplane_vect = None
-        self.lambda0 = 15.4  # xray wavelength (set using beam energy) (todo check units)
-        self.k0 = self.get_k0()  # Incident xray wave-vector
+        self.lambda0 = None  # xray wavelength (set using beam energy) (todo check units)
+        self.k0 = None  # Incident xray wave-vector
+        self.kp = None
         self.at = None  # np.array([[5.43, 0, 0], [0, 5.43, 0], [0, 0, 5.43]]) # realspace lattice vectors
         self.bg = None  # np.linalg.inv(self.at) # reciprocal space lattice vectors
         self.bragg_hkl = None
@@ -75,27 +76,33 @@ class DiffracSample:
         # Finds the rotation matrix to satisfy the Bragg condition at an angle of
         # incidence (alpha) with respect to the sample surface (self.normal_vect)
 
-        lambda0 = self.lambda0
-        at = self.at
-        bg = self.bg
-        sam_rot = self.sample_rmat
-
         # vectors in reciprocal space
-        Ghkl = sam_rot @ bg @ self.bragg_hkl
+        Ghkl = self.sample_rmat @ self.bg @ self.bragg_hkl
         self.Ghkl = Ghkl
-        k0 = self.k0
+
+        self.k0 = self.get_k0()
 
         # vectors in real space
-        sample_normal = sam_rot @ self.normal_vect
+        sample_normal = self.sample_rmat @ self.normal_vect
 
         # angle between incident direction and sample normal
         alph1 = np.arccos(
-            np.dot(sample_normal, k0) / (np.linalg.norm(k0) * np.linalg.norm(sample_normal)))
+            np.dot(sample_normal, self.k0) / (np.linalg.norm(self.k0) * np.linalg.norm(sample_normal)))
+
+        print("k0, ", self.k0)
+        print("alpha 1, ", alph1)
+        print("sample normal rotated ", sample_normal)
 
         # rotate around this axis to satisfy the incidence condition
-        incidence_rot_axis = np.cross(k0, sample_normal)
+        incidence_rot_axis = np.cross(self.k0, sample_normal)
+
+        if np.linalg.norm(incidence_rot_axis) == 0:
+            # edge case: sample normal currently pointing at beam; need alternative calculation for a perpendicular axis
+            incidence_rot_axis = self.inplane_vect # this is perpendicular to sample normal in some arbitrary direction
+        print("inc rot axis ", incidence_rot_axis)
+
         M_incidence = rotationmat3D(-alph1 + np.pi / 2 - alpha, incidence_rot_axis)
-        # TODO check sign on alpha
+        # signs on alpha verified by ryan feb2022
 
         # and the rotated vectors in the grazing configuration are:
         rotGhkl = M_incidence @ Ghkl
@@ -105,11 +112,9 @@ class DiffracSample:
         # zeros of this function are the desired condition
         def obj(ph):
             MBragg = rotationmat3D(ph, rotNsample)
-            return (np.linalg.norm(k0 + MBragg @ rotGhkl) - np.linalg.norm(k0))
+            return (np.linalg.norm(self.k0 + MBragg @ rotGhkl) - np.linalg.norm(self.k0))
 
         res = scipy.optimize.fsolve(obj, x0, xtol=1e-20)
-        print(obj(res))
-        print(res)
 
         # 3d rotation matrix before adjustment for delta
         semifinal_rotation = np.dot(rotationmat3D(res, rotNsample), M_incidence)
@@ -119,7 +124,7 @@ class DiffracSample:
             # rotation about the axis of the incoming beam maintains same experimental result
             # but modifies delta
             adj_rotation_mat = rotationmat3D(addtl_beam_rot_angle, self.beam_axis) @ semifinal_rotation
-            kp = np.dot(adj_rotation_mat, Ghkl) + k0
+            kp = np.dot(adj_rotation_mat, Ghkl) + self.k0
             delt = np.arcsin(kp[2] * self.lambda0)
 
             return np.abs(delt)
@@ -128,10 +133,12 @@ class DiffracSample:
         # and throw error if not met?
 
         angle_adjustment = scipy.optimize.minimize(detector_angle, np.pi / 10)
-        print("delta angle ", angle_adjustment.fun * 180 / np.pi)
 
         # get the final rotation
-        return rotationmat3D(angle_adjustment.x, self.beam_axis) @ semifinal_rotation
+        final_rotation = rotationmat3D(angle_adjustment.x, self.beam_axis) @ semifinal_rotation
+        self.kp = np.dot(final_rotation, self.Ghkl) + self.k0
+        print("asin input for delta ", self.kp[2] * self.lambda0)
+        return final_rotation
 
     def find_rotation_grazing_exit(self, exit_angle, x0):
         #   For a given set of miller indices 'hkl', and an exit angle,
@@ -139,33 +146,33 @@ class DiffracSample:
         #   the Bragg reflection is satisfied
 
         # HKL, k0 vectors in reciprocal space
-        Ghkl = self.sample_rmat @ self.bg @ self.bragg_hkl
-        k0 = 1 / self.lambda0 * self.beam_axis
+        self.Ghkl = self.sample_rmat @ self.bg @ self.bragg_hkl
+        self.k0 = self.get_k0()
 
         # bragg angle
-        thetaB = np.arcsin(self.lambda0 * np.linalg.norm(Ghkl) / 2)
+        thetaB = np.arcsin(self.lambda0 * np.linalg.norm(self.Ghkl) / 2)
 
         # scattering angle
         twothetaB = 2 * thetaB
 
         # angle between Ghkl, incident direction
-        k0Ghkl = np.dot(k0, Ghkl)
+        k0Ghkl = np.dot(self.k0, self.Ghkl)
         gamma1 = np.arccos(k0Ghkl / np.linalg.norm(k0Ghkl))
 
         ## Bragg condition for tentative initial config:
         # rotate around axis normal to Ghkl and k0
-        newaxis = np.cross(k0, Ghkl)
+        newaxis = np.cross(self.k0, self.Ghkl)
 
         # bragg condition rotation matrix
         MBragg = rotationmat3D(-gamma1 + np.pi / 2 - thetaB, newaxis)
 
         # rotate intermediate vectors
-        rotGhkl = np.dot(MBragg, Ghkl)
+        rotGhkl = np.dot(MBragg, self.Ghkl)
         rot_sampleN = np.dot(MBragg, np.dot(self.sample_rmat, self.normal_vect))
         rot_sampleN_norm = rot_sampleN / np.linalg.norm(rot_sampleN)
 
         # scattered vector
-        kp = rotGhkl + k0
+        kp = rotGhkl + self.k0
 
         ## rotate to satisfy exit angle requirement
         # zero of this function is the desired angle
@@ -175,8 +182,6 @@ class DiffracSample:
             return np.sin(exit_angle) - np.dot(kp, rot_n) / np.linalg.norm(kp)
 
         res = scipy.optimize.fsolve(obj, x0, xtol=1e-20)
-        print(obj(res))
-        print(res)
 
         # TODO add error checking (if ph=NaN in result, throw e)
 
@@ -189,18 +194,20 @@ class DiffracSample:
             # but modifies delta
 
             adj_rotation_mat = np.dot(rotationmat3D(addtl_beam_rot_angle, self.beam_axis), semifinal_rotation)
-            kp = np.dot(adj_rotation_mat, Ghkl) + k0
+            kp = np.dot(adj_rotation_mat, self.Ghkl) + self.k0
             delt = np.arcsin(kp[2] * self.lambda0)
             return np.abs(delt)
 
         # TODO add formal bounds based on max delta angle
         # and throw error if not met?
 
-        angle_adjustment = scipy.optimize.minimize(detector_angle, 0.001, bounds=[(-np.pi, np.pi)])
+        angle_adjustment = scipy.optimize.minimize(detector_angle, np.pi / 10) #, bounds=[(-np.pi, np.pi)])
         print("delta angle ", angle_adjustment.fun)
 
         # get the final rotation
-        return rotationmat3D(angle_adjustment.x, self.beam_axis) @ semifinal_rotation
+        final_rotation = rotationmat3D(angle_adjustment.x, self.beam_axis) @ semifinal_rotation
+        self.kp = np.dot(final_rotation, self.Ghkl) + self.k0
+        return final_rotation
 
     def set_sample_normal(self, normal):
         # allows to set the sample normal vector and auto-calculates a perpendicular in-plane vector
