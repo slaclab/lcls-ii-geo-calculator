@@ -1,4 +1,3 @@
-import numpy as np
 
 ## globals ##
 c = 2.998e8  # [m/s], speed of light

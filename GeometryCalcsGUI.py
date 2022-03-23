@@ -1,6 +1,6 @@
 import _tkinter
 from tkinter import *
-from tkinter import ttk, filedialog
+from tkinter import ttk, filedialog, scrolledtext
 import sys
 import time
 import matplotlib.pyplot as plt
@@ -10,6 +10,7 @@ import numpy as np
 from tools.conversions import *
 from KappaDiffractometer import KappaDiffractometer
 from DiffracSample import DiffracSample
+from plotting.plot_solved_system import *
 
 
 class BeamGeoApp(Tk):
@@ -29,12 +30,14 @@ class BeamGeoApp(Tk):
         # some GUI construction components need to be referenced outside of constructor functions
         # for changing associated text etc
         self.pathentry = None
-        self.cell_a_entry = None;
-        self.cell_b_entry = None;
+        self.cell_a_entry = None
+        self.cell_b_entry = None
         self.cell_c_entry = None
-        self.cell_alpha_entry = None;
-        self.cell_beta_entry = None;
+        self.cell_alpha_entry = None
+        self.cell_beta_entry = None
         self.cell_gamma_entry = None
+        self.fig1_mainaxes = None
+        self.canvas1 = None
 
         # input variables to track
         self.h_miller = DoubleVar()
@@ -81,6 +84,10 @@ class BeamGeoApp(Tk):
         self.kp = StringVar()
         self.kp.set("[0,0,0]")
 
+        # track current 3d rotation for plotting (initialize at identity rotation)
+        self.current_rotation = np.eye(3)
+        self.last_rotation = None
+
         # call constructor functions
         leftcol = ttk.Frame(self)
         run_button = ttk.Button(leftcol, width=20, text="Run", command=lambda: self.run_command())
@@ -91,6 +98,8 @@ class BeamGeoApp(Tk):
 
         run_button.grid(column=0, row=2, pady=5)
         self.draw_output_text(leftcol, 0, 3)
+
+        self.draw_status_box(leftcol, 0, 4)
 
         self.draw_lattice_fig(rightcol, 0, 0)
 
@@ -180,6 +189,12 @@ class BeamGeoApp(Tk):
 
         output_frame.grid(column=col, row=row, sticky=NW)
 
+    # draw a text box to print status and error messages
+    def draw_status_box(self, parent, col, row):
+        frame = ttk.Frame(parent)
+        textbox = scrolledtext.ScrolledText(frame, width=60, height=6)
+        textbox.grid(column=0, row=0, sticky=W)
+        frame.grid(column=col, row=row, sticky=NW)
 
     # overhead function calls commands to draw lattice radios, file inputs, manual entries
     def draw_latticeinfo_block(self, parent, col, row):
@@ -194,13 +209,14 @@ class BeamGeoApp(Tk):
 
         lattice_frame.grid(column=col, row=row, sticky=NW, padx=3, pady=3)
 
-    # draw figure(s)
+    # draw figure placeholder
     def draw_lattice_fig(self, parent, col, row):
         latfig_frame = ttk.Frame(parent)  # put in frame just in case? for formatting
-        dummy_fig = self.get_dummy_fig()
-        lat_canvas = FigureCanvasTkAgg(dummy_fig, master=latfig_frame)
-        lat_canvas.get_tk_widget().grid(column=0, row=0)
-        lat_canvas.draw()
+        fig = plt.figure()
+        self.fig1_mainaxes = fig.add_subplot(projection='3d')
+        self.canvas1 = FigureCanvasTkAgg(fig, master=latfig_frame)
+        self.canvas1.get_tk_widget().grid(column=0, row=0)
+        self.canvas1.draw()
 
         latfig_frame.grid(column=col, row=row)
 
@@ -411,19 +427,6 @@ class BeamGeoApp(Tk):
 
         detector_lim_frame.grid(column=col, row=row, sticky=W, padx=5, pady=2)
 
-    def get_dummy_fig(self):
-        # draw a dummy plot for gui layout organization, return figure object
-        dummy = plt.figure()
-        ax = dummy.add_subplot()
-        ax.set_title("Dummy Plot")
-        ax.set_xlabel("x")
-        ax.set_ylabel("sin(x)")
-        x = np.linspace(0, 5, 25)
-        y = np.sin(x)
-        ax.plot(x, y)
-
-        return dummy  # ?
-
     # use system file browser to locate cif/vasp filepaths
     def open_file_browser(self):
         file = filedialog.askopenfilename()
@@ -479,6 +482,7 @@ class BeamGeoApp(Tk):
                 pass
         else:
             pass
+        self.update_figure()
 
     ## the following 6 functions are for individual lattice parameter updates
     # TODO wrap things in try-except logic probably
@@ -486,18 +490,21 @@ class BeamGeoApp(Tk):
         a = self.cell_a.get()
         self.sample.ucell_a = a
         self.sample.try_update_lattice()
+        self.update_figure()
         return False
 
     def update_cell_b(self):
         b = self.cell_b.get()
         self.sample.ucell_b = b
         self.sample.try_update_lattice()
+        self.update_figure()
         return False
 
     def update_cell_c(self):
         c = self.cell_c.get()
         self.sample.ucell_c = c
         self.sample.try_update_lattice()
+        self.update_figure()
         return False
 
     def update_cell_alpha(self):
@@ -505,18 +512,21 @@ class BeamGeoApp(Tk):
         alpha = np.deg2rad(self.cell_alpha.get())
         self.sample.ucell_alpha = alpha
         self.sample.try_update_lattice()
+        self.update_figure()
         return False
 
     def update_cell_beta(self):
         beta = np.deg2rad(self.cell_beta.get())
         self.sample.ucell_beta = beta
         self.sample.try_update_lattice()
+        self.update_figure()
         return False
 
     def update_cell_gamma(self):
         gamma = np.deg2rad(self.cell_gamma.get())
         self.sample.ucell_gamma = gamma
         self.sample.try_update_lattice()
+        self.update_figure()
         return False
 
     # update wavelength variable internally/on display when energy is changed
@@ -551,6 +561,21 @@ class BeamGeoApp(Tk):
 
         self.sample.set_sample_normal(np.array([self.snorm_x.get(), self.snorm_y.get(), self.snorm_z.get()]))
 
+    def update_figure(self):
+
+        # if no lattice defined, no update
+        if not self.sample.is_lattice_defined:
+            print("Lattice not fully defined")
+            return
+        else:
+            print("trying to update figure")
+            # update figure object
+            # if no rotation, will plot unrotated lattice
+            self.fig1_mainaxes.clear()
+            self.fig1_mainaxes = plot_diffrac_system(self.sample, self.current_rotation, self.diffractometer.nu,
+                                                     self.diffractometer.delta, ax=self.fig1_mainaxes)
+            self.canvas1.draw()
+
     def run_command(self):
         # try: run geometry calcs with provided inputs
 
@@ -571,15 +596,17 @@ class BeamGeoApp(Tk):
             # calculate based on constrained exit angle
             exit_angle = np.deg2rad(self.angle_spec.get())
             ref_rotation = self.sample.find_rotation_grazing_exit(exit_angle, opti_init_condition)
-
+            self.last_rotation = self.current_rotation
+            self.current_rotation = ref_rotation
         else:
             # TODO implement unconstrained solution
             pass
         print("Reference rotation:")
         print(ref_rotation)
+
         # calculate instrument angles
-        self.diffractometer.set_kappa_from_eulerian(ref_rotation)
-        self.diffractometer.calc_detector_angles(ref_rotation, self.sample.Ghkl, self.sample.k0, self.sample.kp, self.sample.lambda0)
+        self.diffractometer.set_kappa_from_eulerian(self.current_rotation)
+        self.diffractometer.calc_detector_angles(self.current_rotation, self.sample.Ghkl, self.sample.k0, self.sample.kp, self.sample.lambda0)
 
         # update display
         angle_decimal_places = 4
@@ -594,6 +621,8 @@ class BeamGeoApp(Tk):
         kp_string = np.array2string(self.sample.kp, formatter={'float_kind':lambda x: "%.2f" % x}, separator=',')
         self.k0.set(k0_string)
         self.kp.set(kp_string)
+
+        self.update_figure()
 
 
 

@@ -10,39 +10,32 @@ from mpl_toolkits.mplot3d.proj3d import proj_transform
 from mpl_toolkits.mplot3d import Axes3D
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 
-def plot_lattice_rotation(at, phi, kappa, omega, sample_rot=None,sample_rot_axis=np.array([0,0,1]), kappa_rot_mat=None, show=True, hide_orig=False):
+def plot_lattice_rotation(at, rotationmat3d, prev_rotationmat3d = None, show=True, hide_orig=False, ax=None):
 
-    # sample rotation
-    if sample_rot is not None:
-        rmat = rotationmat3D(sample_rot, sample_rot_axis)
+    # for stacking or comparing initial/previous and final positions
+    if prev_rotationmat3d is not None:
+        rmat = np.dot(rotationmat3d, prev_rotationmat3d)
     else:
-        rmat = eye(3)
-
-    # instrument rotation
-    kdiff = KappaDiffractometer()
-    kmat = kdiff.kappa_rotation_matrix(phi, kappa, omega)
-    if kappa_rot_mat is not None:
-        # have option to override and use a rotation matrix instead of angles
-        kmat = kappa_rot_mat
-
-    # final (total) sample rotation matrix
-    rmat = np.dot(kmat, rmat)
-
-
+        rmat = rotationmat3d
 
 
     # take linear combinations of bravais vectors
     b1, b2, b3 = at[0, :], at[1, :], at[2, :] # using rows todo check
     o = np.zeros(3)
     # get vertices by combining vectors
-    # doing two stacked unit cells
+    # figure consists of two stacked unit cells
     v = [o, b1, b2, b1+b2, b3, b1+b3, b2+b3, b1+b2+b3, b3*2, b1+b3*2, b2+b3*2, b1+b2+b3*2]
     vrot = [vi.dot(rmat) for vi in v]
+    if prev_rotationmat3d is not None:
+        v = [vi.dot(prev_rotationmat3d) for vi in v]
     coords = np.array(v)
     rot_coords = np.array(vrot)
 
-    fig = plt.figure()
-    ax = fig.add_subplot(projection='3d')
+    if ax is None:
+        fig = plt.figure()
+        ax = fig.add_subplot(projection='3d')
+    else:
+        fig = None
 
     # plot surfaces parallel to b1, b2 vectors and perpendicular to b3
     for j in [0, 4, 8]:

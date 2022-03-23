@@ -2,8 +2,6 @@
 
 import scipy
 from scipy import optimize
-from KappaDiffractometer import KappaDiffractometer
-from tools.angle_calc_utils import *
 from tools.conversions import *
 from tools.cif_file_tools import *
 
@@ -36,6 +34,7 @@ class DiffracSample:
         self.ucell_alpha = None
         self.ucell_beta = None
         self.ucell_gamma = None
+        self.is_lattice_defined = False # track whether lattice geometry variables are fully specified
 
     def readCIF(self, path):
 
@@ -47,6 +46,7 @@ class DiffracSample:
             [self.ucell_a, self.ucell_b, self.ucell_c] = unit_cell_lengths
             [self.ucell_alpha, self.ucell_beta, self.ucell_gamma] = unit_cell_angles
             self.bg = np.linalg.inv(self.at)  # calc reciprocal space lattice vectors
+            self.is_lattice_defined = True
 
         except Exception:
             print('error - could not read cif file')
@@ -65,8 +65,10 @@ class DiffracSample:
                                self.ucell_alpha, self.ucell_beta, self.ucell_gamma]
 
         if None in necessary_variables or 0 in necessary_variables:
+            self.is_lattice_defined = False
             return
         else:
+            self.is_lattice_defined = True
             self.at = bravais_matrix(self.ucell_a, self.ucell_b, self.ucell_c,
                                      self.ucell_alpha, self.ucell_beta, self.ucell_gamma)
             self.bg = np.linalg.inv(self.at)

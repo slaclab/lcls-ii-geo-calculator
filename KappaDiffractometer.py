@@ -4,9 +4,7 @@
 # values in degrees for readability
 import scipy
 from scipy import optimize
-import numpy as np
 from tools.angle_calc_utils import *
-from tools.conversions import *
 
 class KappaDiffractometer:
 

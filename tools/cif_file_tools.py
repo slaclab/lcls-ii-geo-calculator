@@ -1,6 +1,4 @@
-import numpy as np
-from numpy import sin, cos, sqrt
-from angle_calc_utils import *
+from tools.angle_calc_utils import *
 
 
 def cif_symm_to_bravais_lattice(cif_file, use_gemmi=False):
