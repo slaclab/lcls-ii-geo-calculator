@@ -53,17 +53,19 @@ class KappaDiffractometer:
             # objective value is norm^2 error
             return np.linalg.norm(self.kappa_rotation_matrix(phi, kappa, omega) - reference_rotation) ** 2
 
-
         # constrain on kappa:
         def kappa_constraint_fn(params):
             kappa = params[1]
             return self.max_kappa - abs(kappa)
-
+        # currently not using constraint on kappa
         cons = {'type': 'ineq', 'fun': kappa_constraint_fn}
-        kappa_solution = scipy.optimize.minimize(kappa_compare, [1,1,1], constraints = cons, tol=1e-20).x
+
+        kappa_solution = scipy.optimize.minimize(kappa_compare, np.array([1,1,1]), tol=1e-20).x
         self.phi = kappa_solution[0]
         self.kappa = kappa_solution[1]
         self.omega = kappa_solution[2]
+
+        print("Kappa solution: ", kappa_solution)
 
 
     def kappa_rotation_matrix(self, phi, kappa, omega):
@@ -97,8 +99,8 @@ class KappaDiffractometer:
         ##rotmat = np.dot(rotationmat3D(self.theta, zaxis), rotmat)
         return rotmat
 
-    def calc_detector_angles(self, ref_rotation, sample_Ghkl, sample_k0, sample_kp, sample_lambda0):
-        kp = np.dot(ref_rotation, sample_Ghkl) + sample_k0
+    def calc_detector_angles(self, sample_kp, sample_lambda0):
+
         self.nu = np.arctan2(sample_kp[1], sample_kp[0]) # radians
         self.delta = np.arcsin(sample_kp[2] * sample_lambda0)
         #return self.nu, self.delta

@@ -91,17 +91,12 @@ class DiffracSample:
         alph1 = np.arccos(
             np.dot(sample_normal, self.k0) / (np.linalg.norm(self.k0) * np.linalg.norm(sample_normal)))
 
-        print("k0, ", self.k0)
-        print("alpha 1, ", alph1)
-        print("sample normal rotated ", sample_normal)
-
         # rotate around this axis to satisfy the incidence condition
         incidence_rot_axis = np.cross(self.k0, sample_normal)
 
         if np.linalg.norm(incidence_rot_axis) == 0:
             # edge case: sample normal currently pointing at beam; need alternative calculation for a perpendicular axis
             incidence_rot_axis = self.inplane_vect # this is perpendicular to sample normal in some arbitrary direction
-        print("inc rot axis ", incidence_rot_axis)
 
         M_incidence = rotationmat3D(-alph1 + np.pi / 2 - alpha, incidence_rot_axis)
         # signs on alpha verified by ryan feb2022
@@ -115,8 +110,8 @@ class DiffracSample:
         def obj(ph):
             MBragg = rotationmat3D(ph, rotNsample)
             return (np.linalg.norm(self.k0 + MBragg @ rotGhkl) - np.linalg.norm(self.k0))
-
-        res = scipy.optimize.fsolve(obj, x0, xtol=1e-20)
+        print("main rotation optimization:")
+        res = scipy.optimize.fsolve(obj, x0, xtol=1e-10) # widened the tolerance from e-20 because scipy was throwing errors
 
         # 3d rotation matrix before adjustment for delta
         semifinal_rotation = np.dot(rotationmat3D(res, rotNsample), M_incidence)
@@ -133,13 +128,12 @@ class DiffracSample:
 
         # TODO add formal bounds based on max delta angle
         # and throw error if not met?
-
+        print("detector angle optimization")
         angle_adjustment = scipy.optimize.minimize(detector_angle, np.pi / 10)
 
         # get the final rotation
         final_rotation = rotationmat3D(angle_adjustment.x, self.beam_axis) @ semifinal_rotation
         self.kp = np.dot(final_rotation, self.Ghkl) + self.k0
-        print("asin input for delta ", self.kp[2] * self.lambda0)
         return final_rotation
 
     def find_rotation_grazing_exit(self, exit_angle, x0):

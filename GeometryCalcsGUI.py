@@ -1,16 +1,12 @@
 import _tkinter
 from tkinter import *
 from tkinter import ttk, filedialog, scrolledtext
-import sys
-import time
-import matplotlib.pyplot as plt
-from matplotlib.backends.backend_tkagg import (FigureCanvasTkAgg, NavigationToolbar2Tk)
-from matplotlib.figure import Figure
-import numpy as np
+from matplotlib.backends.backend_tkagg import (FigureCanvasTkAgg)
 from tools.conversions import *
 from KappaDiffractometer import KappaDiffractometer
 from DiffracSample import DiffracSample
-from plotting.plot_solved_system import *
+from plotting.plot_lattice import *
+from plotting.plot_momentum_vectors import *
 
 
 class BeamGeoApp(Tk):
@@ -185,7 +181,7 @@ class BeamGeoApp(Tk):
         mvec_label.grid(column=0, row=0)
         kframe.grid(column=0, row=1)
 
-        extras_frame.grid(column=1, row = 0, sticky=NW, padx=3, pady=1)
+        extras_frame.grid(column=1, row=0, sticky=NW, padx=3, pady=1)
 
         output_frame.grid(column=col, row=row, sticky=NW)
 
@@ -454,7 +450,8 @@ class BeamGeoApp(Tk):
         # angles associated with diffractometer or sample classes will be in radians
         lengths = [self.sample.ucell_a, self.sample.ucell_b, self.sample.ucell_c]
         angles = [np.round(np.rad2deg(k), 3) for k in
-                  [self.sample.ucell_alpha, self.sample.ucell_beta, self.sample.ucell_gamma]]  # these are internal storage so units radians
+                  [self.sample.ucell_alpha, self.sample.ucell_beta,
+                   self.sample.ucell_gamma]]  # these are internal storage so units radians
 
         update_vals = lengths + angles
         disp_update_list = [self.cell_a_entry, self.cell_b_entry, self.cell_c_entry,
@@ -565,16 +562,19 @@ class BeamGeoApp(Tk):
 
         # if no lattice defined, no update
         if not self.sample.is_lattice_defined:
-            print("Lattice not fully defined")
             return
         else:
-            print("trying to update figure")
             # update figure object
             # if no rotation, will plot unrotated lattice
             self.fig1_mainaxes.clear()
-            self.fig1_mainaxes = plot_diffrac_system(self.sample, self.current_rotation, self.diffractometer.nu,
-                                                     self.diffractometer.delta, ax=self.fig1_mainaxes)
+            unit_cell = get_unitcell_hull_centered([self.sample.ucell_a, self.sample.ucell_b, self.sample.ucell_c],
+                                          [self.sample.ucell_alpha, self.sample.ucell_beta, self.sample.ucell_gamma])
+            fig, self.fig1_mainaxes = plot_unitcell(unit_cell, self.current_rotation, ax=self.fig1_mainaxes)
+
+            self.fig1_mainaxes = plot_momentum_transfer(self.sample, np.array([0,0,0]), self.fig1_mainaxes)
+
             self.canvas1.draw()
+
 
     def run_command(self):
         # try: run geometry calcs with provided inputs
@@ -583,7 +583,7 @@ class BeamGeoApp(Tk):
         self.update_hkl_from_inputs()
         self.update_samplenormal_from_inputs()
 
-        opti_init_condition = -15 # TODO this is arbitrary for now (and therefore maybe not optimal)
+        opti_init_condition = -15  # TODO this is arbitrary for now (and therefore maybe not optimal)
 
         if self.incd_vs_exit.get() == "inc":
             # calculate based on constrained incidence angle
@@ -606,25 +606,23 @@ class BeamGeoApp(Tk):
 
         # calculate instrument angles
         self.diffractometer.set_kappa_from_eulerian(self.current_rotation)
-        self.diffractometer.calc_detector_angles(self.current_rotation, self.sample.Ghkl, self.sample.k0, self.sample.kp, self.sample.lambda0)
+        self.diffractometer.calc_detector_angles(self.sample.kp, self.sample.lambda0)
 
         # update display
         angle_decimal_places = 4
         self.kappa.set(np.round(np.rad2deg(self.diffractometer.kappa), angle_decimal_places))
         self.phi.set(np.round(np.rad2deg(self.diffractometer.phi), angle_decimal_places))
         self.omega.set(np.round(np.rad2deg(self.diffractometer.omega), angle_decimal_places))
-        self.nu.set(np.round(np.rad2deg(self.diffractometer.nu),angle_decimal_places))
+        self.nu.set(np.round(np.rad2deg(self.diffractometer.nu), angle_decimal_places))
         self.delta.set(np.round(np.rad2deg(self.diffractometer.delta), angle_decimal_places))
 
         # output momentum vector
-        k0_string = np.array2string(self.sample.k0, formatter={'float_kind':lambda x: "%.2f" % x}, separator=',')
-        kp_string = np.array2string(self.sample.kp, formatter={'float_kind':lambda x: "%.2f" % x}, separator=',')
+        k0_string = np.array2string(self.sample.k0, formatter={'float_kind': lambda x: "%.2f" % x}, separator=',')
+        kp_string = np.array2string(self.sample.kp, formatter={'float_kind': lambda x: "%.2f" % x}, separator=',')
         self.k0.set(k0_string)
         self.kp.set(kp_string)
 
         self.update_figure()
-
-
 
 
 app = BeamGeoApp()

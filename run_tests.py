@@ -3,7 +3,7 @@ from KappaDiffractometer import KappaDiffractometer
 from DiffracSample import DiffracSample
 from tools.angle_calc_utils import *
 from tests.angle_calc_unittests import *
-from tests.test_plotters import *
+from tests.test_unitcell_plotter import *
 
 
 def main():
