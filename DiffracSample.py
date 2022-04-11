@@ -14,12 +14,13 @@ class DiffracSample:
         self.beam_axis = np.array([1, 0, 0])  # beam at x-axis unless overridden
         self.normal_vect = None
         self.inplane_vect = None
+        self.beam_energy = None # photon energy in eV
         self.lambda0 = None  # xray wavelength (set using beam energy) (todo check units)
         self.k0 = None  # Incident xray wave-vector
         self.kp = None
         self.at = None  # np.array([[5.43, 0, 0], [0, 5.43, 0], [0, 0, 5.43]]) # realspace lattice vectors
         self.bg = None  # np.linalg.inv(self.at) # reciprocal space lattice vectors
-        self.bragg_hkl = None
+        self.bragg_hkl = np.array([0,0,0])
         self.lattice_filepath = None
         self.sg = None
         self.sample_rotation_angle = 0  # sample rotation in z when held in goniometer, all instrument angles at zero
@@ -222,6 +223,7 @@ class DiffracSample:
 
     def set_beam_energy(self, E):
         # convert beam energy [eV] to wavelength [A]
+        self.beam_energy = E
         self.lambda0 = photonE_to_wavelen_A(E)
 
     def set_sample_rotation(self, angle=0, axis=np.array([0, 0, 1])):
