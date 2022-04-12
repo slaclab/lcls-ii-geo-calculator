@@ -5,7 +5,7 @@ from KappaDiffractometer import KappaDiffractometer
 from DiffracSample import DiffracSample
 from cmd import Cmd
 import os
-from datetime import date, datetime
+from datetime import datetime
 from plotting.plot_lattice import get_unitcell_hull_centered, plot_unitcell
 from plotting.plot_momentum_vectors import plot_momentum_transfer, plot_detector_target
 
@@ -62,6 +62,7 @@ class GeoCalculatorShell(Cmd):
         '''edit unit cell side length a (input in Angstrom as a single numerical value)'''
         try:
             self.sample.ucell_a = float(a_in.strip())
+            self.sample.try_update_lattice()
         except TypeError:
             print("Please provide a numerical input")
 
@@ -69,6 +70,7 @@ class GeoCalculatorShell(Cmd):
         '''edit unit cell side length b (input in Angstrom as a single numerical value)'''
         try:
             self.sample.ucell_b = float(b_in.strip())
+            self.sample.try_update_lattice()
         except TypeError:
             print("Please provide a numerical input")
 
@@ -76,14 +78,30 @@ class GeoCalculatorShell(Cmd):
         '''edit unit cell side length c (input in Angstrom as a single numerical value)'''
         try:
             self.sample.ucell_c = float(c_in.strip())
+            self.sample.try_update_lattice()
         except TypeError:
             print("Please provide a numerical input")
+
+    def do_set_all_cell_lengths(self, input):
+        '''Specify unit cell lengths as comma-separated triplet a,b,c or single value for cubic cells.'''
+        try:
+            input = input.strip().split(',')
+            if np.size(input) > 1:
+                [self.sample.ucell_a, self.sample.ucell_b, self.sample.ucell_c] = [float(value.strip()) for value in input]
+            else:
+                [self.sample.ucell_a, self.sample.ucell_b, self.sample.ucell_c] = [float(input[0])] * 3
+            self.sample.try_update_lattice()
+        except TypeError as e:
+            print("Check input formatting!")
+            print("sys error statements:")
+            print(e)
 
     def do_set_cell_angle_alpha(self, alpha_in):
         '''edit unit cell angle alpha (input in degrees as single numerical value)'''
         try:
             alpha_deg = float(alpha_in.strip())
             self.sample.ucell_alpha = np.deg2rad(alpha_deg)
+            self.sample.try_update_lattice()
         except TypeError:
             print("Please provide a numerical input")
 
@@ -92,6 +110,7 @@ class GeoCalculatorShell(Cmd):
         try:
             beta_deg = float(beta_in.strip())
             self.sample.ucell_beta = np.deg2rad(beta_deg)
+            self.sample.try_update_lattice()
         except TypeError:
             print("Please provide a numerical input")
 
@@ -100,8 +119,23 @@ class GeoCalculatorShell(Cmd):
         try:
             gamma_deg = float(gamma_in.strip())
             self.sample.ucell_gamma = np.deg2rad(gamma_deg)
+            self.sample.try_update_lattice()
         except TypeError:
             print("Please provide a numerical input")
+
+    def do_set_all_cell_angles(self, input):
+        '''Specify unit cell angles as comma-separated triplet alpha,beta,gamma or single value for identical angles.'''
+        try:
+            input = input.strip().split(',')
+            if np.size(input) > 1:
+                [self.sample.ucell_alpha, self.sample.ucell_beta, self.sample.ucell_gamma] = [np.deg2rad(float(value.strip())) for value in input]
+            else:
+                [self.sample.ucell_alpha, self.sample.ucell_beta, self.sample.ucell_gamma] = [np.deg2rad(float(input[0]))] * 3
+            self.sample.try_update_lattice()
+        except TypeError as e:
+            print("Check input formatting!")
+            print("sys error statements:")
+            print(e)
 
     def do_set_photon_energy(self, E_eV):
         '''Provide incident photon energy in units of eV.'''
@@ -133,28 +167,34 @@ class GeoCalculatorShell(Cmd):
 
     def do_print_working_sample_info(self, inp):
         '''Display information about sample currently loaded into program.'''
-        if not self.sample.is_lattice_defined:
-            print("Sample lattice structure not fully defined.")
-        else:
-            print("------------------------------")
-            print("Unit cell dimensions")
-            print("Cell lengths in Angstrom:")
-            print("a: ", str(self.sample.ucell_a), " | ",
-                  "b: ", str(self.sample.ucell_b), " | ",
-                  "c: ", str(self.sample.ucell_c))
-            print("Cell angles in degrees:")
+
+        print("------------------------------")
+        print("Unit cell dimensions")
+        print("Cell lengths in Angstrom:")
+        print("a: ", str(self.sample.ucell_a), " | ",
+              "b: ", str(self.sample.ucell_b), " | ",
+              "c: ", str(self.sample.ucell_c))
+        print("Cell angles in degrees:")
+        if not None in [self.sample.ucell_alpha, self.sample.ucell_beta, self.sample.ucell_gamma]:
             print("alpha: ", str(np.rad2deg(self.sample.ucell_alpha)), " | ",
                   "beta: ", str(np.rad2deg(self.sample.ucell_beta)), " | ",
                   "gamma: ", str(np.rad2deg(self.sample.ucell_gamma)))
-            print("------------------------------")
-            print("Photon energy: ", str(self.sample.beam_energy), " eV")
-            print("Photon wavelength: ", str(self.sample.lambda0), " Angstrom")
-            print("------------------------------")
-            print("Miller indices")
-            print("H: ", str(self.sample.bragg_hkl[0]), " | ",
-                  "K: ", str(self.sample.bragg_hkl[1]), " | ",
-                  "L: ", str(self.sample.bragg_hkl[2]))
-            print("------------------------------")
+        else:
+            angles = [self.sample.ucell_alpha, self.sample.ucell_beta, self.sample.ucell_gamma]
+            for i in range(3):
+                if angles[i] is None:
+                    angles[i] = 0
+            angles_str = "alpha: {0} | beta: {1} | gamma: {2}".format(*[str(np.rad2deg(ang)) for ang in angles])
+            print(angles_str)
+        print("------------------------------")
+        print("Photon energy: ", str(self.sample.beam_energy), " [eV]")
+        print("Photon wavelength: ", str(self.sample.lambda0), " [Angstrom]")
+        print("------------------------------")
+        print("Miller indices")
+        print("H: ", str(self.sample.bragg_hkl[0]), " | ",
+              "K: ", str(self.sample.bragg_hkl[1]), " | ",
+              "L: ", str(self.sample.bragg_hkl[2]))
+        print("------------------------------")
 
     def do_calc_rotation_for_incidence_angle(self, inc_angle):
         '''Calculate sample rotation and instrument positions for input incidence angle in degrees.'''
@@ -214,16 +254,17 @@ class GeoCalculatorShell(Cmd):
 
         if not self.sample.is_lattice_defined:
             print("Error: not enough lattice information specified to plot unit cell!")
-            return False
+            return
         else:
             unit_cell = get_unitcell_hull_centered([self.sample.ucell_a, self.sample.ucell_b, self.sample.ucell_c],
                                           [self.sample.ucell_alpha, self.sample.ucell_beta, self.sample.ucell_gamma])
             fig, ax = plot_unitcell(unit_cell, self.current_rotation, ax)
-            ax = plot_momentum_transfer(self.sample, np.array([0,0,0]), ax)
-            ax = plot_detector_target(self.sample, np.array([0,0,0]), self.diffractometer.nu,
+            if not None in [self.sample.kp, self.sample.k0]:
+                ax = plot_momentum_transfer(self.sample, np.array([0,0,0]), ax)
+                ax = plot_detector_target(self.sample, np.array([0,0,0]), self.diffractometer.nu,
                                       self.diffractometer.delta, ax)
 
-            plt.show()
+            plt.show(block=False)
 
     def do_save_summary_to_txt(self, filename):
         '''Summarize current sample/calculations and save as .txt file with given filename.'''
