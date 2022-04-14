@@ -156,14 +156,20 @@ class GeoCalculatorShell(Cmd):
             print("Please check input formatting; values should be comma-separated floats with no other characters.")
 
     def do_select_incident_face(self, samplenorm_string):
-        '''Provide normal vector for sample face incident to incoming radiation. Example input 1,0,0
-            sets incident face to be parallel to unit cell "a" direction.'''
-        try:
-            samplenorm_list = samplenorm_string.strip().split(',')
-            [x,y,z] = [float(item.strip()) for item in samplenorm_list]
-            self.sample.set_sample_normal(np.array([x,y,z]))
-        except ValueError or TypeError:
-            print("Check formatting: values should be comma-separated numerical")
+        '''Provide input a, b, or c to select sample face incident to incoming radiation. Selecting "a" sets
+        the incident face to be the crystal face plane which does not contain unit cell side a.'''
+        face_label = samplenorm_string.strip().lower()
+        if not face_label in ['a', 'b', 'c']:
+            print("Error: please specify incident face using a, b, or c labels.")
+        else:
+            if face_label == 'a':
+                self.sample.set_sample_normal(1)
+            if face_label == 'b':
+                self.sample.set_sample_normal(2)
+            if face_label == 'c':
+                self.sample.set_sample_normal(3)
+
+
 
     def do_print_working_sample_info(self, inp):
         '''Display information about sample currently loaded into program.'''
@@ -208,6 +214,7 @@ class GeoCalculatorShell(Cmd):
         rotation_3d = self.sample.find_rotation_grazing_incidence(alpha, -15)
         self.diffractometer.set_kappa_from_eulerian(rotation_3d)
         self.diffractometer.calc_detector_angles(self.sample.kp, self.sample.lambda0)
+        self.current_rotation = rotation_3d
         self.last_calc_type = "Fixed incidence angle"
         print("Rotation transformation matrix:")
         print(np.array2string(rotation_3d))
@@ -234,6 +241,7 @@ class GeoCalculatorShell(Cmd):
         self.diffractometer.set_kappa_from_eulerian(rotation_3d)
         self.diffractometer.calc_detector_angles(self.sample.kp, self.sample.lambda0)
         self.last_calc_type = "Fixed exit angle"
+        self.current_rotation = rotation_3d
         print("Rotation transformation matrix:")
         print(np.array2string(rotation_3d))
         print("Instrument angles:")
@@ -259,12 +267,12 @@ class GeoCalculatorShell(Cmd):
             unit_cell = get_unitcell_hull_centered([self.sample.ucell_a, self.sample.ucell_b, self.sample.ucell_c],
                                           [self.sample.ucell_alpha, self.sample.ucell_beta, self.sample.ucell_gamma])
             fig, ax = plot_unitcell(unit_cell, self.current_rotation, ax)
-            if not None in [self.sample.kp, self.sample.k0]:
+            if self.sample.kp is not None:
                 ax = plot_momentum_transfer(self.sample, np.array([0,0,0]), ax)
                 ax = plot_detector_target(self.sample, np.array([0,0,0]), self.diffractometer.nu,
                                       self.diffractometer.delta, ax)
 
-            plt.show(block=False)
+            plt.show()
 
     def do_save_summary_to_txt(self, filename):
         '''Summarize current sample/calculations and save as .txt file with given filename.'''

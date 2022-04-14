@@ -39,9 +39,7 @@ class BeamGeoApp(Tk):
         self.h_miller = DoubleVar()
         self.l_miller = DoubleVar()
         self.k_miller = DoubleVar()
-        self.snorm_x = DoubleVar()
-        self.snorm_y = DoubleVar()
-        self.snorm_z = DoubleVar()
+        self.inc_face = StringVar()
         self.e_beam = DoubleVar()
 
         self.wavelen = DoubleVar()
@@ -243,27 +241,17 @@ class BeamGeoApp(Tk):
     def draw_samplenorm_input(self, parent, col, row):
         sn_frame = ttk.Frame(parent)
         vec_elements = ttk.Frame(sn_frame)
-        sn_label1 = ttk.Label(sn_frame, text='Specify vector normal to sample face plane')
-        sn_label2 = ttk.Label(sn_frame, text='using same (sample) basis as unit cell vectors')
-        xlabel = ttk.Label(vec_elements, text='x:')
-        ylabel = ttk.Label(vec_elements, text='y:')
-        zlabel = ttk.Label(vec_elements, text='z:')
-        x_in = ttk.Entry(vec_elements, width=4, textvariable=self.snorm_x)
-        y_in = ttk.Entry(vec_elements, width=4, textvariable=self.snorm_y)
-        z_in = ttk.Entry(vec_elements, width=4, textvariable=self.snorm_z)
+        sn_label1 = ttk.Label(sn_frame, text='Specify sample incident face using a, b, or c.')
+        sn_label2 = ttk.Label(sn_frame, text="Face 'a' does not contain unit cell side a.")
+        facelabel = ttk.Label(vec_elements, text='Incident Face:')
+        face_in = ttk.Entry(vec_elements, width=4, textvariable=self.inc_face)
 
         sn_label1.grid(column=0, row=0, sticky=W, padx=5)
         sn_label2.grid(column=0, row=1, sticky=W, padx=5)
         vec_elements.grid(column=0, row=2, sticky=W, padx=5)
 
-        xlabel.grid(column=0, row=0)
-        x_in.grid(column=1, row=0, padx=2)
-
-        ylabel.grid(column=2, row=0)
-        y_in.grid(column=3, row=0, padx=2)
-
-        zlabel.grid(column=4, row=0)
-        z_in.grid(column=5, row=0, padx=2)
+        facelabel.grid(column=0, row=0)
+        face_in.grid(column=1, row=0, padx=2)
 
         sn_frame.grid(column=col, row=row, padx=2, pady=5, sticky=W)
 
@@ -550,13 +538,20 @@ class BeamGeoApp(Tk):
 
     def update_samplenormal_from_inputs(self):
         # replace empty strings with zeros
-        for item in [self.snorm_x, self.snorm_y, self.snorm_z]:
-            try:
-                item.get()
-            except _tkinter.TclError:
-                item.set(0.0)
+        try:
+            self.inc_face.get()
+        except _tkinter.TclError:
+            self.inc_face.set('a')
 
-        self.sample.set_sample_normal(np.array([self.snorm_x.get(), self.snorm_y.get(), self.snorm_z.get()]))
+        incident_face = self.inc_face.get().strip().lower()
+        if not incident_face in ['a', 'b', 'c']:
+            raise ValueError("Sample incident face must be defined by a, b, or c")
+        if incident_face == "a":
+            self.sample.set_sample_normal(1)
+        if incident_face == 'b':
+            self.sample.set_sample_normal(2)
+        if incident_face == 'c':
+            self.sample.set_sample_normal(3)
 
     def update_figure(self):
 
@@ -570,8 +565,8 @@ class BeamGeoApp(Tk):
             unit_cell = get_unitcell_hull_centered([self.sample.ucell_a, self.sample.ucell_b, self.sample.ucell_c],
                                           [self.sample.ucell_alpha, self.sample.ucell_beta, self.sample.ucell_gamma])
             fig, self.fig1_mainaxes = plot_unitcell(unit_cell, self.current_rotation, ax=self.fig1_mainaxes)
-
-            self.fig1_mainaxes = plot_momentum_transfer(self.sample, np.array([0,0,0]), self.fig1_mainaxes)
+            if self.sample.kp is not None:
+                self.fig1_mainaxes = plot_momentum_transfer(self.sample, np.array([0,0,0]), self.fig1_mainaxes)
 
             self.canvas1.draw()
 

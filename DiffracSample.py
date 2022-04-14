@@ -11,7 +11,7 @@ class DiffracSample:
     # degrees only allowed at points in user interface
 
     def __init__(self):
-        self.beam_axis = np.array([1, 0, 0])  # beam at x-axis unless overridden
+        self.beam_axis = np.array([0, 0, 1])  # beam at x-axis unless overridden
         self.normal_vect = None
         self.inplane_vect = None
         self.beam_energy = None # photon energy in eV
@@ -206,20 +206,39 @@ class DiffracSample:
         self.kp = np.dot(final_rotation, self.Ghkl) + self.k0
         return final_rotation
 
-    def set_sample_normal(self, normal):
+    def set_sample_normal(self, normal_key):
         # allows to set the sample normal vector and auto-calculates a perpendicular in-plane vector
+        # normal key in [1,2,3] corresponds to an incident face defined by (i.e. not containing)
+        # unit cell length vector [a, b, c]
+        xaxis = np.array([1, 0, 0])
+        yaxis = np.array([0, 1, 0])
+        zaxis = np.array([0, 0, 1])
+        # note that after base unit cell construction, cell side 'a' is nominally in line
+        # with the 'x' axis
+        # cell sides 'a' and 'b' lie in the x-y plane
 
-        # normalize the given vector
-        self.normal_vect = normal / np.linalg.norm(normal)
+        if normal_key == 1:
+            # normal vector should be out of plane not containing unit cell side a
 
-        if normal[0] == 0:
-            self.inplane_vect = np.array([1, 0, 0])
-        elif normal[1] == 0:
-            self.inplane_vect = np.array([0, 1, 0])
-        elif normal[2] == 0:
-            self.inplane_vect = np.array([0, 0, 1])
+            self.inplane_vect = np.dot(rotationmat3D(self.ucell_gamma, zaxis), xaxis)
+            plane_normal_rotation = np.dot(rotationmat3D(np.pi/2 - self.ucell_beta, self.inplane_vect),
+                                           rotationmat3D(self.ucell_gamma+np.pi/2, zaxis))
+            self.normal_vect = np.dot(plane_normal_rotation, xaxis)
+
+        elif normal_key == 2:
+            # normal vector should be out of plane not containing unit cell side b
+            self.inplane_vect = xaxis
+            plane_normal_rotation = rotationmat3D(np.pi/2 - self.ucell_alpha, -xaxis)
+            self.normal_vect = np.dot(plane_normal_rotation, -yaxis)
+
+        elif normal_key == 3:
+            # normal vector should be out of plane not containing unit cell side c
+            self.inplane_vect = xaxis
+            self.normal_vect = -zaxis
+            # this is assuming the convention that the beam radiation nominally
+            # travels in the direction of positive z
         else:
-            self.inplane_vect = np.array([1, 1, -1 * (normal[0] + normal[1]) / normal[2]])
+            raise ValueError("Improper key value provided to DiffracSample.set_sample_normal")
 
     def set_beam_energy(self, E):
         # convert beam energy [eV] to wavelength [A]

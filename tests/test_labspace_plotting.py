@@ -9,7 +9,7 @@ from plotting.plot_lattice import set_axes_equal
 
 # spoof inputs
 sample = DiffracSample()
-sample.k0 = np.array([1, 0, 0])
+sample.k0 = sample.beam_axis
 sample.kp = np.array([1, 1, 0.001])
 sample.kp = sample.kp / np.linalg.norm(sample.kp)
 nu = np.arctan2(sample.kp[1], sample.kp[0])  # radians
