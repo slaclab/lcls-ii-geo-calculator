@@ -20,7 +20,7 @@ class DiffracSample:
         self.kp = None
         self.at = None  # np.array([[5.43, 0, 0], [0, 5.43, 0], [0, 0, 5.43]]) # realspace lattice vectors
         self.bg = None  # np.linalg.inv(self.at) # reciprocal space lattice vectors
-        self.bragg_hkl = np.array([0,0,0])
+        self.bragg_hkl = np.array([1,1,1])
         self.lattice_filepath = None
         self.sg = None
         self.sample_rotation_angle = 0  # sample rotation in z when held in goniometer, all instrument angles at zero

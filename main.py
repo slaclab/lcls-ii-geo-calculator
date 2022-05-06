@@ -6,7 +6,7 @@ from DiffracSample import DiffracSample
 from cmd import Cmd
 import os
 from datetime import datetime
-from plotting.plot_lattice import get_unitcell_hull_centered, plot_unitcell
+from plotting.plot_lattice import get_unitcell_hull, plot_unitcell, get_unitcell_center
 from plotting.plot_momentum_vectors import plot_momentum_transfer, plot_detector_target
 
 
@@ -264,12 +264,13 @@ class GeoCalculatorShell(Cmd):
             print("Error: not enough lattice information specified to plot unit cell!")
             return
         else:
-            unit_cell = get_unitcell_hull_centered([self.sample.ucell_a, self.sample.ucell_b, self.sample.ucell_c],
+            unit_cell = get_unitcell_hull([self.sample.ucell_a, self.sample.ucell_b, self.sample.ucell_c],
                                           [self.sample.ucell_alpha, self.sample.ucell_beta, self.sample.ucell_gamma])
+            center_3d = get_unitcell_center(unit_cell)
             fig, ax = plot_unitcell(unit_cell, self.current_rotation, ax)
             if self.sample.kp is not None:
-                ax = plot_momentum_transfer(self.sample, np.array([0,0,0]), ax)
-                ax = plot_detector_target(self.sample, np.array([0,0,0]), self.diffractometer.nu,
+                ax = plot_momentum_transfer(self.sample, center_3d, ax)
+                ax = plot_detector_target(self.sample, center_3d, self.diffractometer.nu,
                                       self.diffractometer.delta, ax)
 
             plt.show()

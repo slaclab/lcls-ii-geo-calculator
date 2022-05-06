@@ -62,4 +62,18 @@ def plot_detector_target(sample, unitcell_center, nu, delta, ax):
 
     return ax
 
+def plot_milleridx_plane(sample, unitcell_center, ax):
+    h = sample.bragg_hkl[0]; k = sample.bragg_hkl[1]; l = sample.bragg_hkl[2]
+    plane_spacing = [0,0,0]
+    miller_indices = [h, k, l]
+    cell_lengths = [sample.ucell_a, sample.ucell_b, sample.ucell_c]
+    for i in range(3):
+        if miller_indices[i] != 0:
+            plane_spacing[i] = cell_lengths[i] / miller_indices[i]
+    [a_spacing, b_spacing, c_spacing] = plane_spacing
+
+    o_corner = unitcell_center - 0.5 * np.array(cell_lengths)
+
+
+
 
